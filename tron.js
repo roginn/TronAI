@@ -5,6 +5,7 @@ $(document).ready(function(){
 	var h = $("#canvas").height();
 	
 	var cell_size = 30;
+	var interval = 150;
 	var num_cols = Math.floor(w/cell_size);
 	var num_rows = Math.floor(h/cell_size);
 	
@@ -37,7 +38,7 @@ $(document).ready(function(){
 		create_snake();
 		
 		if(typeof game_loop != "undefined") clearInterval(game_loop);
-		game_loop = setInterval(paint2, 100);
+		game_loop = setInterval(iterate, interval);
 	}
 	
 	function clear_grid()
@@ -81,15 +82,8 @@ $(document).ready(function(){
 		return new_pos;
 	}
 
-	function move_head2(head, dir)
-	{
-		if(dir == "right") head.x++;
-		else if(dir == "left") head.x--;
-		else if(dir == "down") head.y++;
-		else if(dir == "up") head.y--;
-	}	
 
-	function check_collision2(head)
+	function check_collision(head)
 	{
 		if(head.x < 0 || head.x >= num_cols || head.y < 0 || head.y >= num_rows)
 			return true;
@@ -109,23 +103,30 @@ $(document).ready(function(){
 		return false;
 	}
 	
-	function paint2()
+	function iterate()
 	{
+		do_ia();		
+
+		ctx.fillStyle = "white";
+		ctx.fillRect(0, 0, w, h);
+		ctx.strokeStyle = "black";
+		ctx.strokeRect(0, 0, w, h);
+
 		dir_p1 = next_dir_p1;
 		dir_p2 = next_dir_p2;
 
 		var new_head1 = move_head(head_p1, dir_p1);
 		var new_head2 = move_head(head_p2, dir_p2);
 
-		var p1_lost = check_collision2(new_head1);
-		var p2_lost = check_collision2(new_head2);
+		var p1_lost = check_collision(new_head1);
+		var p2_lost = check_collision(new_head2);
 		var head_bang = check_heads(new_head1, new_head2);
 
 		if(p1_lost || p2_lost || head_bang)
 		{
 			if(p1_lost ^ p2_lost)
 				p1_lost ? score_p2++ : score_p1++;
-			
+
 			init();
 			return;
 		}
@@ -139,10 +140,25 @@ $(document).ready(function(){
 		{
 			for(var j = 0; j < num_rows; j++)
 			{
-				if(grid_at(i, j) == p1)
-					paint_cell(i, j, "blue");
-				else if(grid_at(i, j) == p2)
-					paint_cell(i, j, "red");
+				// if(grid_at(i, j) == p1)
+				// 	paint_cell(i, j, "blue");
+				// else if(grid_at(i, j) == p2)
+				// 	paint_cell(i, j, "red");
+				switch(grid_at(i, j))
+				{
+					case p1:
+						paint_cell(i, j, "blue");
+						break;
+					case p2:
+						paint_cell(i, j, "red");
+						break;
+					case 10:
+						paint_cell(i, j, "green");
+						break;
+					case 20:
+						paint_cell(i, j, "yellow");
+						break;
+				}
 			}
 		}
 
@@ -151,7 +167,6 @@ $(document).ready(function(){
 		ctx.fillText(score_text, 5, h-5);		
 	}
 
-	
 	function paint_cell(x, y, color)
 	{
 		ctx.fillStyle = color;
@@ -175,4 +190,106 @@ $(document).ready(function(){
 		else if(key == "83" && dir_p2 != "up") next_dir_p2 = "down";
 
 	});
+
+
+
+	// AI FUNCTIONS
+
+	function do_ia(){
+		var p = head_p2;
+
+		// count space
+		var up = down = left = right = 0;
+
+		if(p.x < num_cols-1 && grid_at(p.x+1, p.y) == 0)
+			right = fill_count({x: p.x+1, y: p.y});
+
+		if(p.x > 0 && grid_at(p.x-1, p.y) == 0)
+			left = fill_count({x: p.x-1, y: p.y});
+
+		if(p.y < num_rows-1 && grid_at(p.x, p.y+1) == 0)
+			down = fill_count({x: p.x, y: p.y+1});
+
+		if(p.y > 0 && grid_at(p.x, p.y-1) == 0)
+			up = fill_count({x: p.x, y: p.y-1});
+
+		var v_dir, v_value, h_dir, h_value, chosen_dir;
+		v_dir 	= up > down ? "up" : "down";
+		v_value = up > down ? up : down;
+		h_dir   = right > left ? "right" : "left";
+		h_value = right > left ? right : left;
+		chosen_dir = v_value > h_value ? v_dir : h_dir;
+
+		next_dir_p2 = chosen_dir;
+	}
+
+	function fill_count(seed)
+	{
+		var red_black = new Array(num_cols*num_rows);
+		var queue = {
+			length: 0,
+			index: 0,
+			items: new Array(),
+
+			enqueue: function(item)
+			{
+				queue.items.push(item);
+				queue.length++;
+			},
+
+			dequeue: function()
+			{
+				if(queue.length == 0)
+					return;
+
+				queue.length--;
+				return queue.items[queue.index++];
+			}
+		};
+
+		var count = 0;
+		var count_red = count_black = 0;
+
+		queue.enqueue(seed);
+		while(queue.length > 0)
+		{
+			var p = queue.dequeue();
+			if(red_black[p.y*num_rows+p.x] == 20)
+				continue;
+
+			red_black[p.y*num_rows+p.x] = 20;
+			paint_cell(p.x, p.y, "yellow");
+
+			// NOT RED_BLACK
+			// count++;
+			// RED_BLACK
+			if((p.x + p.y) % 2 == 0)
+				count_red++;
+			else
+				count_black++;
+
+			function f(t){ queue.enqueue(t); }
+			for_each_blank_neighbor(p, f);
+		}
+
+		// NOT RED_BLACK
+		// return count;
+		// RED_BLACK
+		return Math.min(count_red, count_black);
+	}
+
+	function for_each_blank_neighbor(p, f)
+	{
+		if(p.x < num_cols-1 && grid_at(p.x+1, p.y) == 0)
+			f({x: p.x+1, y: p.y});
+
+		if(p.x > 0 && grid_at(p.x-1, p.y) == 0)
+			f({x: p.x-1, y: p.y});
+
+		if(p.y < num_rows-1 && grid_at(p.x, p.y+1) == 0)
+			f({x: p.x, y: p.y+1});
+
+		if(p.y > 0 && grid_at(p.x, p.y-1) == 0)
+			f({x: p.x, y: p.y-1});
+	}
 });
