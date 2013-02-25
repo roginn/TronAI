@@ -41,7 +41,7 @@ $(document).ready(function(){
 		ctx.textAlign = "center";
 		if(result == "human"){
 			ctx.fillStyle = "blue";
-			ctx.fillText("Human wins!", w/2, h/2);	
+			ctx.fillText("You win!", w/2, h/2);	
 		}
 		else if(result == "machine"){
 			ctx.fillStyle = "red";
@@ -220,6 +220,7 @@ $(document).ready(function(){
 		// else if(key == "83" && dir_p2 != "up") next_dir_p2 = "down";
 
 		if(key == "32" && game.end) { init(); }
+		e.preventDefault();
 	});
 
 
