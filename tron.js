@@ -220,6 +220,7 @@ $(document).ready(function(){
 		// else if(key == "83" && dir_p2 != "up") next_dir_p2 = "down";
 
 		if(key == "32" && game.end) { init(); }
+		e.preventDefault();
 	});
 
 
