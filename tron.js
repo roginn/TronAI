@@ -5,9 +5,16 @@ $(document).ready(function(){
 	var h = $("#canvas").height();
 	
 	var cell_size = 30;
-	var interval = 150;
+	var interval = 300;
 	var num_cols = Math.floor(w/cell_size);
 	var num_rows = Math.floor(h/cell_size);
+
+	var game = {
+		// strategy: fill_difference,
+		strategy: voronoi_difference,
+		minimax_depth: 6,
+		end: false
+	};
 	
 	var grid = new Array(num_cols*num_rows);
 
@@ -22,23 +29,40 @@ $(document).ready(function(){
 	// start game!
 	init();
 
-	function grid_set(x, y, v)
-	{
-		grid[y*num_cols+x] = v;
-	}
+	function map_set(map, x, y, v) { map[y*num_cols+x] = v; }
+	function map_at(map, x, y) { return map[y*num_cols+x]; }
 
-	function grid_at(x, y)
+	function grid_set(x, y, v) { map_set(grid, x, y, v); }
+	function grid_at(x, y) { return map_at(grid, x, y); }
+
+	function show_endgame(result)
 	{
-		return grid[y*num_cols+x];
+		ctx.font = "40pt Arial";
+		ctx.textAlign = "center";
+		if(result == "human"){
+			ctx.fillStyle = "blue";
+			ctx.fillText("Human wins!", w/2, h/2);	
+		}
+		else if(result == "machine"){
+			ctx.fillStyle = "red";
+			ctx.fillText("Machine wins!", w/2, h/2);		
+		}
+		else{
+			ctx.fillStyle = "grey";
+			ctx.fillText("Draw!", w/2, h/2);		
+		}
+
+		ctx.font = "20pt Arial";
+		ctx.fillStyle = "black";
+		ctx.fillText("press space to play again", w/2, 3*h/4);
 	}
 	
 	function init()
 	{
+		game.end = false;
 		clear_grid();
 		create_snake();
-		
-		if(typeof game_loop != "undefined") clearInterval(game_loop);
-		game_loop = setInterval(iterate, interval);
+		iterate();
 	}
 	
 	function clear_grid()
@@ -105,6 +129,7 @@ $(document).ready(function(){
 	
 	function iterate()
 	{
+		var start = new Date().getTime();
 		do_ia();		
 
 		ctx.fillStyle = "white";
@@ -122,12 +147,16 @@ $(document).ready(function(){
 		var p2_lost = check_collision(new_head2);
 		var head_bang = check_heads(new_head1, new_head2);
 
-		if(p1_lost || p2_lost || head_bang)
-		{
-			if(p1_lost ^ p2_lost)
-				p1_lost ? score_p2++ : score_p1++;
+		if(head_bang || (p1_lost && p2_lost)){
+			show_endgame("draw");			
+			game.end = true;
+			return;
+		}
 
-			init();
+		if(p1_lost || p2_lost) {
+			var winner = p1_lost ? "machine" : "human";
+			show_endgame(winner);			
+			game.end = true;
 			return;
 		}
 
@@ -140,10 +169,6 @@ $(document).ready(function(){
 		{
 			for(var j = 0; j < num_rows; j++)
 			{
-				// if(grid_at(i, j) == p1)
-				// 	paint_cell(i, j, "blue");
-				// else if(grid_at(i, j) == p2)
-				// 	paint_cell(i, j, "red");
 				switch(grid_at(i, j))
 				{
 					case p1:
@@ -162,9 +187,14 @@ $(document).ready(function(){
 			}
 		}
 
-		var score_text = "P1 " + score_p1 + " x " + score_p2 + " P2";
-		ctx.fillStyle = "black";
-		ctx.fillText(score_text, 5, h-5);		
+		// var score_text = "P1 " + score_p1 + " x " + score_p2 + " P2";
+		// ctx.fillStyle = "black";
+		// ctx.fillText(score_text, 5, h-5);		
+
+		var elapsed = new Date().getTime() - start;
+		if(!game.end){
+			setTimeout(iterate, Math.max(interval - elapsed));
+		}
 	}
 
 	function paint_cell(x, y, color)
@@ -184,11 +214,12 @@ $(document).ready(function(){
 		else if(key == "39" && dir_p1 != "left") next_dir_p1 = "right";
 		else if(key == "40" && dir_p1 != "up") next_dir_p1 = "down";
 
-		if(key == "65" && dir_p2 != "right") next_dir_p2 = "left";
-		else if(key == "87" && dir_p2 != "down") next_dir_p2 = "up";
-		else if(key == "68" && dir_p2 != "left") next_dir_p2 = "right";
-		else if(key == "83" && dir_p2 != "up") next_dir_p2 = "down";
+		// if(key == "65" && dir_p2 != "right") next_dir_p2 = "left";
+		// else if(key == "87" && dir_p2 != "down") next_dir_p2 = "up";
+		// else if(key == "68" && dir_p2 != "left") next_dir_p2 = "right";
+		// else if(key == "83" && dir_p2 != "up") next_dir_p2 = "down";
 
+		if(key == "32" && game.end) { init(); }
 	});
 
 
@@ -202,16 +233,16 @@ $(document).ready(function(){
 		var up = down = left = right = 0;
 
 		if(p.x < num_cols-1 && grid_at(p.x+1, p.y) == 0)
-			right = fill_count({x: p.x+1, y: p.y});
+			right = fill_count(grid, {x: p.x+1, y: p.y});
 
 		if(p.x > 0 && grid_at(p.x-1, p.y) == 0)
-			left = fill_count({x: p.x-1, y: p.y});
+			left = fill_count(grid, {x: p.x-1, y: p.y});
 
 		if(p.y < num_rows-1 && grid_at(p.x, p.y+1) == 0)
-			down = fill_count({x: p.x, y: p.y+1});
+			down = fill_count(grid, {x: p.x, y: p.y+1});
 
 		if(p.y > 0 && grid_at(p.x, p.y-1) == 0)
-			up = fill_count({x: p.x, y: p.y-1});
+			up = fill_count(grid, {x: p.x, y: p.y-1});
 
 		var v_dir, v_value, h_dir, h_value, chosen_dir;
 		v_dir 	= up > down ? "up" : "down";
@@ -221,9 +252,13 @@ $(document).ready(function(){
 		chosen_dir = v_value > h_value ? v_dir : h_dir;
 
 		next_dir_p2 = chosen_dir;
+
+
+		next_dir_p2 = minimax(grid, head_p1, head_p2, game.minimax_depth);
+
 	}
 
-	function fill_count(seed)
+	function fill_count(map, seed)
 	{
 		var red_black = new Array(num_cols*num_rows);
 		var queue = {
@@ -247,7 +282,6 @@ $(document).ready(function(){
 			}
 		};
 
-		var count = 0;
 		var count_red = count_black = 0;
 
 		queue.enqueue(seed);
@@ -258,38 +292,255 @@ $(document).ready(function(){
 				continue;
 
 			red_black[p.y*num_rows+p.x] = 20;
-			paint_cell(p.x, p.y, "yellow");
+			// paint_cell(p.x, p.y, "yellow");
 
-			// NOT RED_BLACK
-			// count++;
-			// RED_BLACK
 			if((p.x + p.y) % 2 == 0)
 				count_red++;
 			else
 				count_black++;
 
 			function f(t){ queue.enqueue(t); }
-			for_each_blank_neighbor(p, f);
+			for_each_blank_neighbor(map, p, f);
 		}
 
-		// NOT RED_BLACK
-		// return count;
-		// RED_BLACK
 		return Math.min(count_red, count_black);
 	}
 
-	function for_each_blank_neighbor(p, f)
+	function for_each_blank_neighbor(map, p, f)
 	{
-		if(p.x < num_cols-1 && grid_at(p.x+1, p.y) == 0)
+		if(p.x < num_cols-1 && map_at(map, p.x+1, p.y) == 0)
 			f({x: p.x+1, y: p.y});
 
-		if(p.x > 0 && grid_at(p.x-1, p.y) == 0)
+		if(p.x > 0 && map_at(map, p.x-1, p.y) == 0)
 			f({x: p.x-1, y: p.y});
 
-		if(p.y < num_rows-1 && grid_at(p.x, p.y+1) == 0)
+		if(p.y < num_rows-1 && map_at(map, p.x, p.y+1) == 0)
 			f({x: p.x, y: p.y+1});
 
-		if(p.y > 0 && grid_at(p.x, p.y-1) == 0)
+		if(p.y > 0 && map_at(map, p.x, p.y-1) == 0)
 			f({x: p.x, y: p.y-1});
 	}
+
+	function makeState(_map, _head1, _head2, _direction)
+	{
+		return {
+			map: _map.slice(),
+			head1: {x: _head1.x, y: _head1.y},
+			head2: {x: _head2.x, y: _head2.y},
+			direction: _direction
+		};
+	}
+
+	function minimax(init_map, head1, head2, max_depth)
+	{
+		var s0 = new makeState(init_map, head1, head2);
+		var mov = new Array();
+		var p = head2;
+
+		if(p.x < num_cols-1 && map_at(init_map, p.x+1, p.y) == 0)
+			mov.push(makeState(init_map, head1, {x: p.x+1, y: p.y}, "right"));
+
+		if(p.x > 0 && map_at(init_map, p.x-1, p.y) == 0)
+			mov.push(makeState(init_map, head1, {x: p.x-1, y: p.y}, "left"));
+
+		if(p.y < num_rows-1 && map_at(init_map, p.x, p.y+1) == 0)
+			mov.push(makeState(init_map, head1, {x: p.x, y: p.y+1}, "down"));
+
+		if(p.y > 0 && map_at(init_map, p.x, p.y-1) == 0)
+			mov.push(makeState(init_map, head1, {x: p.x, y: p.y-1}, "up"));
+
+
+		var dir_to_go;
+		var max_value = -1 * num_rows * num_cols; // -infinity
+
+		if(mov.length == 1){
+			dir_to_go = mov[0].direction;
+		} else {
+			for(var i = 0; i < mov.length; i++) {
+				var this_value = minimax_iter(mov[i], 2, max_depth, max_value);
+				if(this_value > max_value){
+					dir_to_go = mov[i].direction;
+					max_value = this_value;
+				}
+			}
+		}
+
+		return dir_to_go;
+	}	
+
+	function minimax_iter(state, cur_depth, max_depth, alpha_value)
+	{
+		if(cur_depth < max_depth){
+
+			var p;
+			var mov = new Array();
+
+			if(cur_depth % 2 == 0){
+				// player 1's ply
+				p = state.head1;
+
+				if(p.x < num_cols-1 && map_at(state.map, p.x+1, p.y) == 0){
+					var next_state = makeState(state.map, {x: p.x+1, y: p.y}, state.head2, "right");
+					map_set(next_state.map, p.x+1, p.y, p1);
+					mov.push(next_state);
+				}
+
+				if(p.x > 0 && map_at(state.map, p.x-1, p.y) == 0){
+					var next_state = makeState(state.map, {x: p.x-1, y: p.y}, state.head2, "left");
+					map_set(next_state.map, p.x-1, p.y, p1);
+					mov.push(next_state);					
+				}
+
+				if(p.y < num_rows-1 && map_at(state.map, p.x, p.y+1) == 0){
+					var next_state = makeState(state.map, {x: p.x, y: p.y+1}, state.head2, "down");
+					map_set(next_state.map, p.x, p.y+1, p1);
+					mov.push(next_state);					
+				}
+
+				if(p.y > 0 && map_at(state.map, p.x, p.y-1) == 0){
+					var next_state = makeState(state.map, {x: p.x, y: p.y-1}, state.head2, "up");
+					map_set(next_state.map, p.x, p.y-1, p1);
+					mov.push(next_state);					
+				}
+
+				var min_value = num_rows * num_cols; // +infinity
+				for(var i = 0; i < mov.length; i++) {
+					var this_value = minimax_iter(mov[i], cur_depth+1, max_depth, 0);
+
+					//alpha-beta prunning
+					if(this_value < alpha_value){
+						return this_value;
+					}
+
+					if(this_value < min_value){
+						min_value = this_value;
+					}
+				}
+
+				return min_value;
+
+			} else {
+				// player 2's ply
+				p = state.head2;
+
+				if(p.x < num_cols-1 && map_at(state.map, p.x+1, p.y) == 0){
+					var next_state = makeState(state.map, state.head1, {x: p.x+1, y: p.y}, "right");
+					map_set(next_state.map, p.x+1, p.y, p2);
+					mov.push(next_state);
+				}
+
+				if(p.x > 0 && map_at(state.map, p.x-1, p.y) == 0){
+					var next_state = makeState(state.map, state.head1, {x: p.x-1, y: p.y}, "left");
+					map_set(next_state.map, p.x-1, p.y, p2);
+					mov.push(next_state);					
+				}
+
+				if(p.y < num_rows-1 && map_at(state.map, p.x, p.y+1) == 0){
+					var next_state = makeState(state.map, state.head1, {x: p.x, y: p.y+1}, "down");
+					map_set(next_state.map, p.x, p.y+1, p2);
+					mov.push(next_state);					
+				}
+
+				if(p.y > 0 && map_at(state.map, p.x, p.y-1) == 0){
+					var next_state = makeState(state.map, state.head1, {x: p.x, y: p.y-1}, "up");
+					map_set(next_state.map, p.x, p.y-1, p2);
+					mov.push(next_state);					
+				}
+
+				var max_value = -1 * num_rows * num_cols; // -infinity
+				for(var i = 0; i < mov.length; i++) {
+					var this_value = minimax_iter(mov[i], cur_depth+1, max_depth, max_value);
+					if(this_value > max_value){
+						max_value = this_value;
+					}
+				}
+
+				return max_value;
+			}
+
+		} else {
+			// evaluate and return result
+			return game.strategy(state);
+		}
+	}
+
+	function fill_difference(state)
+	{
+		var fill_p1 = fill_count(state.map, state.head1);
+		var fill_p2 = fill_count(state.map, state.head2);
+
+		return fill_p2 - fill_p1;
+	}
+
+	function voronoi_difference(state)
+	{
+		var map_p1 = state.map.slice();
+		var map_p2 = state.map.slice();
+
+
+		voronoi_count(map_p1, {pos: state.head1, dist: 10});
+		voronoi_count(map_p2, {pos: state.head2, dist: 10});
+
+		var count = 0;
+		for(var i = 0; i < num_rows; i++){
+			for(var j = 0; j < num_cols; j++){
+				var dist_p1 = map_at(map_p1, j, i);
+				var dist_p2 = map_at(map_p2, j, i);
+
+				if(dist_p1 <= 10 && dist_p2 <= 10)
+					continue;
+
+				if(dist_p2 <= 10){
+					count--;
+				} else if(dist_p1 <= 10){
+					count++;
+				} else {
+					if(dist_p2 < dist_p1)
+						count++;
+					else if(dist_p2 > dist_p1)
+						count--;
+				}
+			}
+		}
+
+		return count;
+	}
+
+	function voronoi_count(map, seed)
+	{
+		var queue = {
+			length: 0,
+			index: 0,
+			items: new Array(),
+
+			enqueue: function(item)
+			{
+				queue.items.push(item);
+				queue.length++;
+			},
+
+			dequeue: function()
+			{
+				if(queue.length == 0)
+					return;
+
+				queue.length--;
+				return queue.items[queue.index++];
+			}
+		};
+
+		queue.enqueue(seed);
+		while(queue.length > 0)
+		{
+			var p = queue.dequeue();
+			var d = p.dist;
+			if(map_at(map, p.pos.x, p.pos.y) >= 10)	
+				continue;
+
+			map_set(map, p.pos.x, p.pos.y, d);
+
+			function f(t){ queue.enqueue({pos: t, dist: d+1}); }
+			for_each_blank_neighbor(map, p.pos, f);
+		}
+	}	
 });
